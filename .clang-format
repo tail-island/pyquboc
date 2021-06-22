@@ -1,0 +1,6 @@
+AllowShortLambdasOnASingleLine: None
+BasedOnStyle: LLVM
+ColumnLimit: 0
+FixNamespaceComments: false
+NamespaceIndentation: All
+PointerAlignment: Left
