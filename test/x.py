@@ -1,6 +1,6 @@
 from funcy import keep
 from neal import SimulatedAnnealingSampler
-from cpp_pyquboc import Binary, Constraint, Placeholder
+from pyquboc import Binary, Constraint, Placeholder
 from timeit import timeit
 
 

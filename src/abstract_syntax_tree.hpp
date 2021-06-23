@@ -17,8 +17,10 @@ namespace pyquboc {
     binary_variable,
     spin_variable,
     place_holder_variable,
-    with_penalty,
+    sub_hamiltonian,
     constraint,
+    with_penalty,
+    user_defined_expression,
     numeric_literal
   };
 
@@ -217,17 +219,47 @@ namespace pyquboc {
     }
   };
 
-  class constraint final : public variable {
+  class sub_hamiltonian : public variable {
     std::shared_ptr<const expression> _expression;
-    std::function<bool(double)> _condition;
 
   public:
-    constraint(const std::shared_ptr<const pyquboc::expression>& expression, const std::string& name, const std::function<bool(double)>& condition) noexcept : variable(name), _expression(expression), _condition(condition) {
+    sub_hamiltonian(const std::shared_ptr<const pyquboc::expression>& expression, const std::string& name) noexcept : variable(name), _expression(expression) {
       ;
     }
 
     const auto& expression() const noexcept {
       return _expression;
+    }
+
+    pyquboc::expression_type expression_type() const noexcept {
+      return expression_type::sub_hamiltonian;
+    }
+
+    std::string to_string() const noexcept override {
+      return "SubH(" + _expression->to_string() + ", '" + name() + "')";
+    }
+
+    std::size_t hash() const noexcept override {
+      auto result = variable::hash();
+
+      boost::hash_combine(result, "sub_hamiltonian");
+      boost::hash_combine(result, std::hash<pyquboc::expression>()(*_expression));
+
+      return result;
+    }
+
+    bool equals(const std::shared_ptr<const pyquboc::expression>& other) const noexcept override {
+      return variable::equals(other) && _expression->equals(std::static_pointer_cast<const sub_hamiltonian>(other)->_expression);
+    }
+  };
+
+  class constraint final : public sub_hamiltonian {
+    std::function<bool(double)> _condition;
+
+  public:
+    constraint(
+        const std::shared_ptr<const pyquboc::expression>& expression, const std::string& name, const std::function<bool(double)>& condition) noexcept : sub_hamiltonian(expression, name), _condition(condition) {
+      ;
     }
 
     const auto& condition() const noexcept {
@@ -239,34 +271,24 @@ namespace pyquboc {
     }
 
     std::string to_string() const noexcept override {
-      return "Constraint(" + _expression->to_string() + ", '" + name() + "')"; // conditionは文字列化できない……。
+      return "Constraint(" + expression()->to_string() + ", '" + name() + "')"; // conditionは文字列化できない……。
     }
 
     std::size_t hash() const noexcept override {
       auto result = variable::hash();
 
       boost::hash_combine(result, "constraint");
-      boost::hash_combine(result, std::hash<pyquboc::expression>()(*_expression));
 
       return result;
     }
-
-    bool equals(const std::shared_ptr<const pyquboc::expression>& other) const noexcept override {
-      return variable::equals(other) && _expression->equals(std::static_pointer_cast<const constraint>(other)->_expression);
-    }
   };
 
-  class with_penalty final : public variable {
-    std::shared_ptr<const expression> _expression;
-    std::shared_ptr<const expression> _penalty;
+  class with_penalty : public sub_hamiltonian {
+    std::shared_ptr<const pyquboc::expression> _penalty;
 
   public:
-    with_penalty(const std::shared_ptr<const pyquboc::expression>& expression, const std::shared_ptr<const pyquboc::expression>& strength, const std::string& name) noexcept : variable(name), _expression(expression), _penalty(strength) {
+    with_penalty(const std::shared_ptr<const pyquboc::expression>& expression, const std::shared_ptr<const pyquboc::expression>& penalty, const std::string& name) noexcept : sub_hamiltonian(expression, name), _penalty(penalty) {
       ;
-    }
-
-    const auto& expression() const noexcept {
-      return _expression;
     }
 
     const auto& penalty() const noexcept {
@@ -278,21 +300,49 @@ namespace pyquboc {
     }
 
     std::string to_string() const noexcept override {
-      return "WithPenalty(" + _expression->to_string() + ", " + _penalty->to_string() + ", '" + name() + "')";
+      return "WithPenalty(" + expression()->to_string() + ", " + _penalty->to_string() + ", '" + name() + "')";
     }
 
     std::size_t hash() const noexcept override {
-      auto result = variable::hash();
+      auto result = sub_hamiltonian::hash();
 
       boost::hash_combine(result, "with_penalty");
-      boost::hash_combine(result, std::hash<pyquboc::expression>()(*_expression));
       boost::hash_combine(result, std::hash<pyquboc::expression>()(*_penalty));
 
       return result;
     }
 
     bool equals(const std::shared_ptr<const pyquboc::expression>& other) const noexcept override {
-      return variable::equals(other) && _expression->equals(std::static_pointer_cast<const with_penalty>(other)->_expression) && _penalty == std::static_pointer_cast<const with_penalty>(other)->_penalty;
+      return sub_hamiltonian::equals(other) && _penalty->equals(std::static_pointer_cast<const with_penalty>(other)->_penalty);
+    }
+  };
+
+  class user_defined_expression : public expression {
+    std::shared_ptr<const expression> _expression;
+
+  public:
+    user_defined_expression(const std::shared_ptr<const pyquboc::expression>& expression) noexcept : _expression(expression) {
+      ;
+    }
+
+    auto expression() const noexcept {
+      return _expression;
+    }
+
+    pyquboc::expression_type expression_type() const noexcept {
+      return expression_type::user_defined_expression;
+    }
+
+    std::string to_string() const noexcept override {
+      return _expression->to_string();
+    }
+
+    std::size_t hash() const noexcept override {
+      return std::hash<pyquboc::expression>()(*_expression);
+    }
+
+    bool equals(const std::shared_ptr<const pyquboc::expression>& other) const noexcept override {
+      return expression::equals(other) && _expression->equals(std::static_pointer_cast<const user_defined_expression>(other)->_expression);
     }
   };
 
@@ -330,12 +380,28 @@ namespace pyquboc {
       return std::make_shared<numeric_literal>(std::static_pointer_cast<const numeric_literal>(lhs)->value() + std::static_pointer_cast<const numeric_literal>(rhs)->value());
     }
 
+    if (lhs->expression_type() == expression_type::numeric_literal && std::static_pointer_cast<const numeric_literal>(lhs)->value() == 0) {
+      return rhs;
+    }
+
+    if (rhs->expression_type() == expression_type::numeric_literal && std::static_pointer_cast<const numeric_literal>(rhs)->value() == 0) {
+      return lhs;
+    }
+
     return std::make_shared<const add_operator>(lhs, rhs);
   }
 
   inline std::shared_ptr<const expression> operator*(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept {
     if (lhs->expression_type() == expression_type::numeric_literal && rhs->expression_type() == expression_type::numeric_literal) {
       return std::make_shared<numeric_literal>(std::static_pointer_cast<const numeric_literal>(lhs)->value() * std::static_pointer_cast<const numeric_literal>(rhs)->value());
+    }
+
+    if (lhs->expression_type() == expression_type::numeric_literal && std::static_pointer_cast<const numeric_literal>(lhs)->value() == 1) {
+      return rhs;
+    }
+
+    if (rhs->expression_type() == expression_type::numeric_literal && std::static_pointer_cast<const numeric_literal>(rhs)->value() == 1) {
+      return lhs;
     }
 
     return std::make_shared<const mul_operator>(lhs, rhs);
@@ -359,11 +425,17 @@ namespace pyquboc {
     case expression_type::place_holder_variable:
       return functor(std::static_pointer_cast<const placeholder_variable>(expression));
 
-    case expression_type::with_penalty:
-      return functor(std::static_pointer_cast<const with_penalty>(expression));
+    case expression_type::sub_hamiltonian:
+      return functor(std::static_pointer_cast<const sub_hamiltonian>(expression));
 
     case expression_type::constraint:
       return functor(std::static_pointer_cast<const constraint>(expression));
+
+    case expression_type::with_penalty:
+      return functor(std::static_pointer_cast<const with_penalty>(expression));
+
+    case expression_type::user_defined_expression:
+      return functor(std::static_pointer_cast<const user_defined_expression>(expression));
 
     case expression_type::numeric_literal:
       return functor(std::static_pointer_cast<const numeric_literal>(expression));

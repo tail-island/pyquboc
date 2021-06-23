@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -20,17 +21,19 @@ namespace pyquboc {
   // TODO: ペナルティを最後ではなく途中で足し合わせられるか検討する。もし途中で足し合わせられるなら、戻り値が一つになって嬉しい。
 
   class expand final {
-    std::unordered_map<std::string, polynomial> _constraints;
+    std::unordered_map<std::string, polynomial> _sub_hamiltonians;
+    std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
     variables* _variables;
 
   public:
     auto operator()(const std::shared_ptr<const expression>& expression, variables* variables) noexcept {
-      _variables = variables;
+      _sub_hamiltonians = {};
       _constraints = {};
+      _variables = variables;
 
       auto [polynomial, penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, expression);
 
-      return std::tuple{polynomial + penalty, _constraints};
+      return std::tuple{polynomial + penalty, _sub_hamiltonians, _constraints};
     }
 
     auto operator()(const std::shared_ptr<const add_operator>& add_operator) noexcept {
@@ -59,6 +62,22 @@ namespace pyquboc {
       return std::tuple{polynomial{{{}, place_holder_variable}}, polynomial{}};
     }
 
+    auto operator()(const std::shared_ptr<const sub_hamiltonian>& sub_hamiltonian) noexcept {
+      const auto [polynomial, penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, sub_hamiltonian->expression());
+
+      _sub_hamiltonians.emplace(sub_hamiltonian->name(), polynomial);
+
+      return std::tuple{polynomial, penalty};
+    }
+
+    auto operator()(const std::shared_ptr<const constraint>& constraint) noexcept {
+      const auto [polynomial, penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, constraint->expression());
+
+      _constraints.emplace(constraint->name(), std::pair{polynomial, constraint->condition()});
+
+      return std::tuple{polynomial, penalty};
+    }
+
     auto operator()(const std::shared_ptr<const with_penalty>& with_penalty) noexcept {
       const auto [e_polynomial, e_penalty] = visit<std::tuple<polynomial, polynomial>>(*this, with_penalty->expression());
       const auto [p_polynomial, p_penalty] = visit<std::tuple<polynomial, polynomial>>(*this, with_penalty->penalty());
@@ -66,12 +85,8 @@ namespace pyquboc {
       return std::tuple{e_polynomial, e_penalty + p_penalty + p_polynomial};
     }
 
-    auto operator()(const std::shared_ptr<const constraint>& constraint) noexcept {
-      const auto [polynomial, penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, constraint->expression());
-
-      _constraints.emplace(constraint->name(), polynomial);
-
-      return std::tuple{polynomial, penalty};
+    auto operator()(const std::shared_ptr<const user_defined_expression>& user_defined_expression) noexcept {
+      return visit<std::tuple<polynomial, polynomial>>(*this, user_defined_expression->expression());
     }
 
     auto operator()(const std::shared_ptr<const numeric_literal>& numeric_literal) noexcept {
@@ -181,9 +196,9 @@ namespace pyquboc {
   inline auto compile(const std::shared_ptr<const expression>& expression, double strength) noexcept {
     auto variables = pyquboc::variables();
 
-    const auto [polynomial, constraints] = expand()(expression, &variables);
+    const auto [polynomial, sub_hamiltonians, constraints] = expand()(expression, &variables);
     const auto quadratic_polynomial = convert_to_quadratic(polynomial, strength, &variables);
 
-    return model(quadratic_polynomial, constraints, variables);
+    return model(quadratic_polynomial, sub_hamiltonians, constraints, variables);
   }
 }

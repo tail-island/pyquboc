@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <map>
@@ -40,8 +41,14 @@ namespace pyquboc {
       return _names.find(index)->second;
     }
 
-    const auto& data() const noexcept {
-      return _indexes;
+    auto names() const noexcept {
+      auto result = std::vector<std::string>(std::size(_names));
+
+      for (const auto& [index, name] : _names) {
+        result[index] = name;
+      }
+
+      return result;
     }
   };
 
@@ -150,6 +157,10 @@ namespace pyquboc {
       return _feed_dict.at(place_holder_variable->name());
     }
 
+    auto operator()(const std::shared_ptr<const user_defined_expression>& user_defined_expression) const noexcept {
+      return visit<double>(*this, user_defined_expression->expression());
+    }
+
     auto operator()(const std::shared_ptr<const numeric_literal>& numeric_literal) const noexcept {
       return numeric_literal->value();
     }
@@ -158,10 +169,11 @@ namespace pyquboc {
   class solution final {
     std::unordered_map<std::string, int> _sample;
     double _energy;
+    std::unordered_map<std::string, double> _sub_hamiltonians;
     std::unordered_map<std::string, std::pair<bool, double>> _constraints;
 
   public:
-    solution(const std::unordered_map<std::string, int> sample, double energy, const std::unordered_map<std::string, std::pair<bool, double>>& constraints) noexcept : _sample(sample), _energy(energy), _constraints(constraints) {
+    solution(const std::unordered_map<std::string, int> sample, double energy, const std::unordered_map<std::string, double>& sub_hamiltonians, const std::unordered_map<std::string, std::pair<bool, double>>& constraints) noexcept : _sample(sample), _energy(energy), _sub_hamiltonians(sub_hamiltonians), _constraints(constraints) {
       ;
     }
 
@@ -173,19 +185,34 @@ namespace pyquboc {
       return _energy;
     }
 
+    const auto& sub_hamiltonians() const noexcept {
+      return _sub_hamiltonians;
+    }
+
     const auto& constraints() const noexcept {
       return _constraints;
     }
   };
 
+  // TODO: _sub_hamiltoniansを活用できるようにする。
+
   class model final {
     polynomial _quadratic_polynomial;
-    std::unordered_map<std::string, polynomial> _constraints;
+    std::unordered_map<std::string, polynomial> _sub_hamiltonians;
+    std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
     variables _variables;
 
+    static auto to_cimod_vartype(const std::string vartype) noexcept {
+      return vartype == "BINARY" ? cimod::Vartype::BINARY : cimod::Vartype::SPIN;
+    }
+
   public:
-    model(const polynomial& quadratic_polynomial, const std::unordered_map<std::string, polynomial>& constraints, const variables& variables) noexcept : _quadratic_polynomial(quadratic_polynomial), _constraints(constraints), _variables(variables) {
+    model(const polynomial& quadratic_polynomial, const std::unordered_map<std::string, polynomial>& sub_hamiltonians, const std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>>& constraints, const variables& variables) noexcept : _quadratic_polynomial(quadratic_polynomial), _sub_hamiltonians(sub_hamiltonians), _constraints(constraints), _variables(variables) {
       ;
+    }
+
+    auto variable_names() const noexcept {
+      return _variables.names();
     }
 
     auto to_bqm_parameters(const std::unordered_map<std::string, double>& feed_dict) const noexcept { // 不格好でごめんなさい。PythonのBinaryQuadraticModelを作成可能にするために、このメンバ関数でBinaryQuadraticModelの引数を生成します。
@@ -225,35 +252,66 @@ namespace pyquboc {
       return cimod::BinaryQuadraticModel<std::string, double, cimod::Dense>(linear, quadratic, offset, vartype);
     }
 
-    auto decode_samples(const std::vector<std::unordered_map<std::string, int>>& samples, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
-      const auto bqm = to_bqm(feed_dict, vartype == "BINARY" ? cimod::Vartype::BINARY : cimod::Vartype::SPIN);
-      const auto evaluate = pyquboc::evaluate(feed_dict);
+    auto energy(const std::unordered_map<std::string, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
+      return to_bqm(feed_dict, to_cimod_vartype(vartype)).energy([&]() {
+        // BinaryQuadraticModelの引数でvartypeを設定しても、energyでは使われないみたい。。。Determine the energy of the specified sample of a binary quadratic modelって書いてある。。。
+        // しょうがないので、spinからbinaryに変換します。
 
+        auto result = sample;
+
+        if (vartype == "SPIN") {
+          for (const auto& [name, value] : sample) {
+            result[name] = (value + 1) / 2;
+          }
+        }
+
+        return result;
+      }());
+    }
+
+    auto decode_sample(const std::unordered_map<std::string, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
+      const auto evaluate = pyquboc::evaluate(feed_dict);
+      const auto evaluate_polynomial = [&](const auto& polynomial, const auto& sample) {
+        return std::accumulate(std::begin(polynomial), std::end(polynomial), 0.0, [&](const auto acc, const auto& term) {
+          return acc +
+                 std::accumulate(std::begin(term.first.indexes()), std::end(term.first.indexes()), 1, [&](const auto acc, const auto& index) {
+                   const auto value = sample.at(_variables.name(index));
+
+                   return acc * (vartype == "BINARY" ? value : (value + 1) / 2);
+                 }) * evaluate(term.second);
+        });
+      };
+
+      return solution(
+          sample,
+          energy(sample, vartype, feed_dict),
+          [&]() {
+            auto result = std::unordered_map<std::string, double>{};
+
+            for (const auto& [name, polynomial] : _sub_hamiltonians) {
+              result.emplace(name, evaluate_polynomial(polynomial, sample));
+            }
+
+            return result;
+          }(),
+          [&]() {
+            auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
+
+            for (const auto& [name, pair] : _constraints) {
+              const auto& [polynomial, condition] = pair;
+              const auto energy = evaluate_polynomial(polynomial, sample);
+
+              result.emplace(name, std::pair{condition(energy), energy});
+            }
+
+            return result;
+          }());
+    }
+
+    auto decode_samples(const std::vector<std::unordered_map<std::string, int>>& samples, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
       auto result = std::vector<solution>{};
 
-      for (const auto& sample : samples) {
-        result.emplace_back(
-            sample,
-            bqm.energy(sample),
-            [&]() {
-              auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
-
-              for (const auto& [name, polynomial] : _constraints) {
-                const auto energy = std::accumulate(std::begin(polynomial), std::end(polynomial), 0.0, [&](const auto acc, const auto& term) {
-                  return acc +
-                         std::accumulate(std::begin(term.first.indexes()), std::end(term.first.indexes()), 1, [&](const auto acc, const auto& index) {
-                           const auto value = sample.at(_variables.name(index));
-
-                           return acc * (vartype == "BINARY" ? value :(value + 1) / 2);
-                         }) * evaluate(term.second);
-                });
-
-                result.emplace(name, std::pair{energy == 0, energy});
-              }
-
-              return result;
-            }());
-      }
+      std::transform(std::begin(samples), std::end(samples), std::back_inserter(result), [&](const auto& sample) { return decode_sample(sample, vartype, feed_dict); });
 
       return result;
     }

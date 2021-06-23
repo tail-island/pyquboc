@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <iostream>
 #include <map>
 #include <vector>
 
@@ -5,6 +7,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#include <vartypes.hpp>
 
 #include "abstract_syntax_tree.hpp"
 #include "compiler.hpp"
@@ -15,7 +19,7 @@ using namespace py::literals;
 PYBIND11_MODULE(cpp_pyquboc, m) {
   m.doc() = "pyquboc C++ binding";
 
-  py::class_<pyquboc::expression, std::shared_ptr<pyquboc::expression>>(m, "Expression")
+  py::class_<pyquboc::expression, std::shared_ptr<pyquboc::expression>>(m, "Base")
       .def("__add__", [](const std::shared_ptr<const pyquboc::expression>& expression, const std::shared_ptr<const pyquboc::expression>& other) {
         return expression + other;
       })
@@ -32,7 +36,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
         return expression + std::make_shared<const pyquboc::numeric_literal>(-other);
       })
       .def("__rsub__", [](const std::shared_ptr<const pyquboc::expression>& expression, double other) {
-        return std::make_shared<const pyquboc::numeric_literal>(-other) + expression;
+        return std::make_shared<const pyquboc::numeric_literal>(other) + std::make_shared<const pyquboc::numeric_literal>(-1) * expression;
       })
       .def("__mul__", [](const std::shared_ptr<const pyquboc::expression>& expression, const std::shared_ptr<const pyquboc::expression>& other) {
         return expression * other;
@@ -63,7 +67,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
 
         return result;
       })
-      .def("__neg__", [](const std::shared_ptr<const pyquboc::expression>& expression, double strength) {
+      .def("__neg__", [](const std::shared_ptr<const pyquboc::expression>& expression) {
         return std::make_shared<const pyquboc::numeric_literal>(-1) * expression;
       })
       .def(
@@ -87,18 +91,81 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
   py::class_<pyquboc::placeholder_variable, std::shared_ptr<pyquboc::placeholder_variable>, pyquboc::expression>(m, "Placeholder")
       .def(py::init<const std::string&>());
 
+  py::class_<pyquboc::sub_hamiltonian, std::shared_ptr<pyquboc::sub_hamiltonian>, pyquboc::expression>(m, "SubH")
+      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&>(), py::arg("hamiltonian"), py::arg("label"));
+
   py::class_<pyquboc::constraint, std::shared_ptr<pyquboc::constraint>, pyquboc::expression>(m, "Constraint")
-      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>());
+      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>(), py::arg("hamiltonian"), py::arg("label"), py::arg("condition") = py::cpp_function([](double x) {
+                                                                                                                                                                              return x == 0;
+                                                                                                                                                                            }));
 
   py::class_<pyquboc::with_penalty, std::shared_ptr<pyquboc::with_penalty>, pyquboc::expression>(m, "WithPenalty")
       .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::shared_ptr<const pyquboc::expression>&, const std::string&>());
 
+  py::class_<pyquboc::user_defined_expression, std::shared_ptr<pyquboc::user_defined_expression>, pyquboc::expression>(m, "UserDefinedExpress")
+      .def(py::init<const std::shared_ptr<const pyquboc::expression>&>());
+
   py::class_<pyquboc::numeric_literal, std::shared_ptr<pyquboc::numeric_literal>, pyquboc::expression>(m, "Num")
       .def(py::init<double>());
 
-  // TODO: index_labelに対応する。でも、この機能が必要な理由が分からなくて、やる気が出ない……。
+  py::class_<pyquboc::solution>(m, "DecodedSample")
+      .def_property_readonly("sample", &pyquboc::solution::sample)
+      .def_property_readonly("energy", &pyquboc::solution::energy)
+      .def_property_readonly("subh", [](const pyquboc::solution& solution) {
+        auto result = solution.sub_hamiltonians();
+
+        std::transform(std::begin(solution.constraints()), std::end(solution.constraints()), std::inserter(result, std::begin(result)), [](const auto& constraint) {
+          return std::pair{constraint.first, constraint.second.second};
+        });
+
+        return result;
+      })
+      .def(
+          "constraints", [](const pyquboc::solution& solution, bool only_broken) {
+            auto constraints = solution.constraints();
+
+            if (only_broken) {
+              return [&]() {
+                auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
+
+                for (const auto& [name, value] : constraints) {
+                  const auto& [not_broken, energy] = value;
+
+                  if (not_broken) {
+                    continue;
+                  }
+
+                  result.emplace(name, value);
+                }
+
+                return result;
+              }();
+            }
+
+            return constraints;
+          },
+          py::arg("only_broken"))
+      .def("array", [](const pyquboc::solution& solution, const std::string& name, int index) {
+        return solution.sample().at(name + "[" + std::to_string(index) + "]");
+      })
+      .def("array", [](const pyquboc::solution& solution, const std::string& name, const py::tuple& indexes) {
+        const auto name_and_indexes = [&]() {
+          auto result = name;
+
+          for (const auto& index : indexes.cast<std::vector<int>>()) {
+            result += "[" + std::to_string(index) + "]";
+          }
+
+          return result;
+        }();
+
+        return solution.sample().at(name_and_indexes);
+      });
+
+  // TODO: index_labelに対応する。でも、この機能が必要な理由が分からなくて、しかもコードが汚くなるので、やる気が出ない……。
 
   py::class_<pyquboc::model>(m, "Model")
+      .def_property_readonly("variables", &pyquboc::model::variable_names)
       .def(
           "to_bqm", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
             const auto [linear, quadratic, offset] = model.to_bqm_parameters(feed_dict);
@@ -106,6 +173,22 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             return py::module::import("dimod").attr("BinaryQuadraticModel")(linear, quadratic, offset, py::module::import("dimod").attr("Vartype").attr("BINARY")); // dimodのPythonのBinaryQuadraticModelを作成します。cimodのPythonのBinaryQuadraticModelだと、dwave-nealで通らなかった……。
           },
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
+      .def(
+          "to_qubo", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
+            // return model.to_bqm(feed_dict, cimod::Vartype::BINARY).to_qubo(); なんでだか、cimodのto_qubo()だとテストを通らなかった。。。
+
+            const auto [linear, quadratic, offset] = model.to_bqm_parameters(feed_dict);
+
+            return py::module::import("dimod").attr("BinaryQuadraticModel")(linear, quadratic, offset, py::module::import("dimod").attr("Vartype").attr("BINARY")).attr("to_qubo")();
+          },
+          py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
+      .def(
+          "to_ising", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
+            return model.to_bqm(feed_dict, cimod::Vartype::BINARY).to_ising();
+          },
+          py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
+      .def("energy", &pyquboc::model::energy, py::arg("sample"), py::arg("vartype"), py::arg("feed_dict") = std::unordered_map<std::string, double>{})
+      .def("decode_sample", &pyquboc::model::decode_sample, py::arg("sample"), py::arg("vartype"), py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
           "decode_sampleset", [](const pyquboc::model& model, const py::object& sampleset, const std::unordered_map<std::string, double>& feed_dict) {
             const auto variables = sampleset.attr("variables").cast<std::vector<std::string>>();
@@ -134,34 +217,4 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             return model.decode_samples(samples, sampleset.attr("vartype").attr("name").cast<std::string>(), feed_dict);
           },
           py::arg("sampleset"), py::arg("feed_dict") = std::unordered_map<std::string, double>{});
-
-  py::class_<pyquboc::solution>(m, "DecodedSample")
-      .def_property_readonly("sample", &pyquboc::solution::sample)
-      .def_property_readonly("energy", &pyquboc::solution::energy)
-      .def(
-          "constraints",
-          [](const pyquboc::solution& solution, bool only_broken) {
-            auto constraints = solution.constraints();
-
-            if (only_broken) {
-              return [&]() {
-                auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
-
-                for (const auto& [name, value] : constraints) {
-                  const auto& [not_broken, energy] = value;
-
-                  if (not_broken) {
-                    continue;
-                  }
-
-                  result.emplace(name, value);
-                }
-
-                return result;
-              }();
-            }
-
-            return constraints;
-          },
-          py::arg("only_broken"));
 }
