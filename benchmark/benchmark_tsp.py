@@ -1,4 +1,4 @@
-from pyqubo import Array, Constraint, Placeholder
+from pyquboc import Array, Constraint, Placeholder
 import logging
 import time
 import argparse
@@ -13,8 +13,7 @@ logger = logging.getLogger("benchmark_tsp")
 
 
 def tsp_with_timeout(n_city, timeout_sec):
-
-    @timeout(timeout_sec)
+    # @timeout(timeout_sec, use_signals=False)
     def tsp(n_city):
         t0 = time.time()
         x = Array.create('c', (n_city, n_city), 'BINARY')

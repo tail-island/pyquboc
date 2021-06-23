@@ -52,7 +52,7 @@ namespace pyquboc {
     }
   };
 
-  using indexes = boost::container::small_vector<int, 8>;
+  using indexes = boost::container::small_vector<int, 4>;
 
   class product final {
     pyquboc::indexes _indexes;
