@@ -107,7 +107,7 @@ setup(
     author_email="rojima1@gmail.com",
     description="PyQUBO clone.",
     long_description="",
-    packages=["pyquboc"],
+    packages=["pyquboc", "pyquboc.integer", "pyquboc.util"],
     install_requires=["jij-cimod", "six"],
     ext_modules=[CMakeExtension("cpp_pyquboc")],
     cmdclass={"build_ext": CMakeBuild},
