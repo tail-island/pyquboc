@@ -1,10 +1,11 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
+#include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <boost/functional/hash.hpp>
 
@@ -50,42 +51,20 @@ namespace std {
 }
 
 namespace pyquboc {
-  class binary_operator : public expression {
-    std::shared_ptr<const expression> _lhs;
-    std::shared_ptr<const expression> _rhs;
+  class add_operator final : public expression {
+    std::vector<std::shared_ptr<const expression>> _children;
 
-  protected:
-    binary_operator(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept : _lhs(lhs), _rhs(rhs) {
+  public:
+    add_operator(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept : _children{lhs, rhs} {
       ;
     }
 
-  public:
-    const auto& lhs() const noexcept {
-      return _lhs;
+    const auto& children() const noexcept {
+      return _children;
     }
 
-    const auto& rhs() const noexcept {
-      return _rhs;
-    }
-
-    std::size_t hash() const noexcept override {
-      auto result = static_cast<std::size_t>(0);
-
-      boost::hash_combine(result, std::hash<expression>()(*_lhs));
-      boost::hash_combine(result, std::hash<expression>()(*_rhs));
-
-      return result;
-    }
-
-    bool equals(const std::shared_ptr<const expression>& other) const noexcept override {
-      return expression::equals(other) && _lhs->equals(std::static_pointer_cast<const binary_operator>(other)->_lhs) && _rhs->equals(std::static_pointer_cast<const binary_operator>(other)->_rhs);
-    }
-  };
-
-  class add_operator final : public binary_operator {
-  public:
-    add_operator(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept : binary_operator(lhs, rhs) {
-      ;
+    auto add_child(const std::shared_ptr<const expression>& expression) noexcept {
+      _children.emplace_back(expression);
     }
 
     pyquboc::expression_type expression_type() const noexcept {
@@ -93,22 +72,61 @@ namespace pyquboc {
     }
 
     std::string to_string() const noexcept override {
-      return "(" + lhs()->to_string() + " + " + rhs()->to_string() + ")";
+      return "(" +
+             std::accumulate(std::begin(_children), std::end(_children), std::string(), [](const auto& acc, const auto& child) {
+               return acc + (std::size(acc) > 0 ? " + " : "") + child->to_string();
+             }) +
+             ")";
     }
 
     std::size_t hash() const noexcept override {
-      auto result = binary_operator::hash();
+      auto result = static_cast<std::size_t>(0);
 
       boost::hash_combine(result, "+");
 
+      for (const auto& child : _children) {
+        boost::hash_combine(result, std::hash<expression>()(*child));
+      }
+
       return result;
+    }
+
+    bool equals(const std::shared_ptr<const expression>& other) const noexcept override {
+      if (!expression::equals(other)) {
+        return false;
+      }
+
+      const auto& other_add_operator = std::static_pointer_cast<const add_operator>(other);
+
+      if (std::size(_children) != std::size(other_add_operator->_children)) {
+        return false;
+      }
+
+      for (auto i = 0; i < static_cast<int>(std::size(_children)); ++i) {
+        if (!_children[i]->equals(other_add_operator->_children[i])) {
+          return false;
+        }
+      }
+
+      return true;
     }
   };
 
-  class mul_operator final : public binary_operator {
+  class mul_operator final : public expression {
+    std::shared_ptr<const expression> _lhs;
+    std::shared_ptr<const expression> _rhs;
+
   public:
-    mul_operator(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept : binary_operator(lhs, rhs) {
+    mul_operator(const std::shared_ptr<const expression>& lhs, const std::shared_ptr<const expression>& rhs) noexcept : _lhs(lhs), _rhs(rhs) {
       ;
+    }
+
+    const auto& lhs() const noexcept {
+      return _lhs;
+    }
+
+    const auto& rhs() const noexcept {
+      return _rhs;
     }
 
     pyquboc::expression_type expression_type() const noexcept {
@@ -120,11 +138,17 @@ namespace pyquboc {
     }
 
     std::size_t hash() const noexcept override {
-      auto result = binary_operator::hash();
+      auto result = static_cast<std::size_t>(0);
 
       boost::hash_combine(result, "*");
+      boost::hash_combine(result, std::hash<expression>()(*_lhs));
+      boost::hash_combine(result, std::hash<expression>()(*_rhs));
 
       return result;
+    }
+
+    bool equals(const std::shared_ptr<const expression>& other) const noexcept override {
+      return expression::equals(other) && _lhs->equals(std::static_pointer_cast<const mul_operator>(other)->_lhs) && _rhs->equals(std::static_pointer_cast<const mul_operator>(other)->_rhs);
     }
   };
 

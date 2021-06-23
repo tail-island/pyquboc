@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <cstdint>
+#include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -52,7 +52,7 @@ namespace pyquboc {
     }
   };
 
-  using indexes = boost::container::small_vector<int, 4>;
+  using indexes = boost::container::small_vector<int, 2>;
 
   class product final {
     pyquboc::indexes _indexes;
@@ -101,6 +101,8 @@ namespace std {
 }
 
 namespace pyquboc {
+  // TODO: monomialの場合を場合分けすることで効率化できるか、検討する。std::variantが使える？
+
   using polynomial = std::unordered_map<product, std::shared_ptr<const expression>>;
 
   inline auto operator+(const polynomial& polynomial_1, const polynomial& polynomial_2) noexcept {
@@ -146,7 +148,9 @@ namespace pyquboc {
     }
 
     auto operator()(const std::shared_ptr<const add_operator>& add_operator) const noexcept {
-      return visit<double>(*this, add_operator->lhs()) + visit<double>(*this, add_operator->rhs());
+      return std::accumulate(std::begin(add_operator->children()), std::end(add_operator->children()), 0.0, [&](const auto& acc, const auto& child) {
+        return acc + visit<double>(*this, child);
+      });
     }
 
     auto operator()(const std::shared_ptr<const mul_operator>& mul_operator) const noexcept {
@@ -194,8 +198,6 @@ namespace pyquboc {
     }
   };
 
-  // TODO: _sub_hamiltoniansを活用できるようにする。
-
   class model final {
     polynomial _quadratic_polynomial;
     std::unordered_map<std::string, polynomial> _sub_hamiltonians;
@@ -209,10 +211,6 @@ namespace pyquboc {
   public:
     model(const polynomial& quadratic_polynomial, const std::unordered_map<std::string, polynomial>& sub_hamiltonians, const std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>>& constraints, const variables& variables) noexcept : _quadratic_polynomial(quadratic_polynomial), _sub_hamiltonians(sub_hamiltonians), _constraints(constraints), _variables(variables) {
       ;
-    }
-
-    auto variable_names() const noexcept {
-      return _variables.names();
     }
 
     auto to_bqm_parameters(const std::unordered_map<std::string, double>& feed_dict) const noexcept { // 不格好でごめんなさい。PythonのBinaryQuadraticModelを作成可能にするために、このメンバ関数でBinaryQuadraticModelの引数を生成します。

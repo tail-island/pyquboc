@@ -37,10 +37,29 @@ namespace pyquboc {
     }
 
     auto operator()(const std::shared_ptr<const add_operator>& add_operator) noexcept {
-      const auto [l_polynomial, l_penalty] = visit<std::tuple<polynomial, polynomial>>(*this, add_operator->lhs());
-      const auto [r_polynomial, r_pelalty] = visit<std::tuple<polynomial, polynomial>>(*this, add_operator->rhs());
+      // 汚いコードでごめんなさい。パフォーマンスのためなので、ご容赦を。
 
-      return std::tuple{l_polynomial + r_polynomial, l_penalty + r_pelalty};
+      const auto& add = [](auto& polyominal, const auto& other) {
+        for (const auto& [product, coefficient] : other) {
+          const auto [it, emplaced] = polyominal.emplace(product, coefficient);
+
+          if (!emplaced) {
+            it->second = it->second + coefficient;
+          }
+        }
+      };
+
+      auto polynomial = pyquboc::polynomial{};
+      auto penalty = pyquboc::polynomial{};
+
+      for (const auto& child: add_operator->children()) {
+        const auto [child_polynomial, child_penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, child);
+
+        add(polynomial, child_polynomial);
+        add(penalty, child_penalty);
+      }
+
+      return std::tuple{polynomial, penalty};
     }
 
     auto operator()(const std::shared_ptr<const mul_operator>& mul_operator) noexcept {

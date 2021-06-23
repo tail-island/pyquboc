@@ -82,6 +82,18 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
       .def("__str__", &pyquboc::expression::to_string)
       .def("__repr__", &pyquboc::expression::to_string);
 
+  py::class_<pyquboc::add_operator, std::shared_ptr<pyquboc::add_operator>, pyquboc::expression>(m, "Add")
+      .def("__iadd__", [](std::shared_ptr<pyquboc::add_operator>& add_operator, const std::shared_ptr<const pyquboc::expression>& other) {
+        add_operator->add_child(other);
+
+        return add_operator;
+      })
+      .def("__iadd__", [](std::shared_ptr<pyquboc::add_operator>& add_operator, double other) {
+        add_operator->add_child(std::make_shared<const pyquboc::numeric_literal>(other));
+
+        return add_operator;
+      });
+
   py::class_<pyquboc::binary_variable, std::shared_ptr<pyquboc::binary_variable>, pyquboc::expression>(m, "Binary")
       .def(py::init<const std::string&>());
 
@@ -95,9 +107,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
       .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&>(), py::arg("hamiltonian"), py::arg("label"));
 
   py::class_<pyquboc::constraint, std::shared_ptr<pyquboc::constraint>, pyquboc::expression>(m, "Constraint")
-      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>(), py::arg("hamiltonian"), py::arg("label"), py::arg("condition") = py::cpp_function([](double x) {
-                                                                                                                                                                              return x == 0;
-                                                                                                                                                                            }));
+      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>(), py::arg("hamiltonian"), py::arg("label"), py::arg("condition") = py::cpp_function([](double x) { return x == 0; }));
 
   py::class_<pyquboc::with_penalty, std::shared_ptr<pyquboc::with_penalty>, pyquboc::expression>(m, "WithPenalty")
       .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::shared_ptr<const pyquboc::expression>&, const std::string&>());
@@ -165,7 +175,6 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
   // TODO: index_labelに対応する。でも、この機能が必要な理由が分からなくて、しかもコードが汚くなるので、やる気が出ない……。
 
   py::class_<pyquboc::model>(m, "Model")
-      .def_property_readonly("variables", &pyquboc::model::variable_names)
       .def(
           "to_bqm", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
             const auto [linear, quadratic, offset] = model.to_bqm_parameters(feed_dict);
@@ -175,11 +184,12 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
           "to_qubo", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
-            // return model.to_bqm(feed_dict, cimod::Vartype::BINARY).to_qubo(); なんでだか、cimodのto_qubo()だとテストを通らなかった。。。
+            return model.to_bqm(feed_dict, cimod::Vartype::BINARY).to_qubo();
 
-            const auto [linear, quadratic, offset] = model.to_bqm_parameters(feed_dict);
+            // cimodのto_qubo()だとテストを通らない。。。cimodは、係数が0の場合はlinearから削除するみたい。これで良いような気もするけど、どうなんだろ？　Python上でdimodにやらせると遅くてベンチマークが悲惨な結果になるので、とりあえずこのままで。
 
-            return py::module::import("dimod").attr("BinaryQuadraticModel")(linear, quadratic, offset, py::module::import("dimod").attr("Vartype").attr("BINARY")).attr("to_qubo")();
+            // const auto [linear, quadratic, offset] = model.to_bqm_parameters(feed_dict);
+            // return py::module::import("dimod").attr("BinaryQuadraticModel")(linear, quadratic, offset, py::module::import("dimod").attr("Vartype").attr("BINARY")).attr("to_qubo")();
           },
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
