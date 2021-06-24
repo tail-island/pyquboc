@@ -47,7 +47,8 @@ class TestExpress(unittest.TestCase):
     def test_compile_binary(self):
         a, b = Binary("a"), Binary("b")
         exp = 1 + a * b + a - 2
-        expected_qubo = {('a', 'a'): 1.0, ('a', 'b'): 1.0, ('b', 'b'): 0.0}
+        # expected_qubo = {('a', 'a'): 1.0, ('a', 'b'): 1.0, ('b', 'b'): 0.0}
+        expected_qubo = {('a', 'a'): 1.0, ('a', 'b'): 1.0}  # cimodが係数0のlinearを削除するので。
         expected_offset = -1
         self.compile_check(exp, expected_qubo, expected_offset)
 
@@ -60,14 +61,16 @@ class TestExpress(unittest.TestCase):
     def test_compile_expand_add(self):
         a, b = Binary("a"), Binary("b")
         exp = (a + b) * (a - b)
-        expected_qubo = {('a', 'a'): 1.0, ('a', 'b'): 0.0, ('b', 'b'): -1.0}
+        # expected_qubo = {('a', 'a'): 1.0, ('a', 'b'): 0.0, ('b', 'b'): -1.0}
+        expected_qubo = {('a', 'a'): 1.0, ('b', 'b'): -1.0}  # cimodが係数0のlinearを削除するので。
         expected_offset = 0.0
         self.compile_check(exp, expected_qubo, expected_offset)
 
     def test_compile_div(self):
         a, b = Binary("a"), Binary("b")
         exp = a * b / 2 + 1
-        expected_qubo = {('a', 'a'): 0.0, ('a', 'b'): 0.5, ('b', 'b'): 0.0}
+        # expected_qubo = {('a', 'a'): 0.0, ('a', 'b'): 0.5, ('b', 'b'): 0.0}
+        expected_qubo = {('a', 'b'): 0.5}  # cimodが係数0のlinearを削除するので。
         expected_offset = 1.0
         q, offset = exp.compile().to_qubo()
         self.compile_check(exp, expected_qubo, expected_offset)
@@ -108,7 +111,8 @@ class TestExpress(unittest.TestCase):
     def test_compile_constraint(self):
         a, b, c = Binary("a"), Binary("b"), Binary("c")
         exp = Constraint(a * b * c, label="constraint")
-        expected_qubo = {('a', 'a * b'): -10.0, ('b', 'a * b'): -10.0, ('a * b', 'a * b'): 15.0, ('a', 'a'): 0.0, ('a', 'b'): 5.0, ('c', 'a * b'): 1.0, ('b', 'b'): 0.0, ('c', 'c'): 0.0}
+        # expected_qubo = {('a', 'a * b'): -10.0, ('b', 'a * b'): -10.0, ('a * b', 'a * b'): 15.0, ('a', 'a'): 0.0, ('a', 'b'): 5.0, ('c', 'a * b'): 1.0, ('b', 'b'): 0.0, ('c', 'c'): 0.0}
+        expected_qubo = {('a', 'a * b'): -10.0, ('b', 'a * b'): -10.0, ('a * b', 'a * b'): 15.0, ('a', 'b'): 5.0, ('c', 'a * b'): 1.0}  # cimodが係数0のlinearを削除するので。
         expected_offset = 0
         self.compile_check(exp, expected_qubo, expected_offset, feed_dict={})
 

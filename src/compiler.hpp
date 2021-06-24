@@ -13,8 +13,6 @@
 #include "abstract_syntax_tree.hpp"
 #include "model.hpp"
 
-#include <iostream>
-
 namespace pyquboc {
   // Expand to polynomial.
 
@@ -39,7 +37,7 @@ namespace pyquboc {
     auto operator()(const std::shared_ptr<const add_operator>& add_operator) noexcept {
       // 汚いコードでごめんなさい。パフォーマンスのためなので、ご容赦を。
 
-      const auto& add = [](auto& polyominal, const auto& other) {
+      const auto& merge = [](auto& polyominal, const auto& other) {
         for (const auto& [product, coefficient] : other) {
           const auto [it, emplaced] = polyominal.emplace(product, coefficient);
 
@@ -55,8 +53,8 @@ namespace pyquboc {
       for (const auto& child: add_operator->children()) {
         const auto [child_polynomial, child_penalty] = visit<std::tuple<pyquboc::polynomial, pyquboc::polynomial>>(*this, child);
 
-        add(polynomial, child_polynomial);
-        add(penalty, child_penalty);
+        merge(polynomial, child_polynomial);
+        merge(penalty, child_penalty);
       }
 
       return std::tuple{polynomial, penalty};

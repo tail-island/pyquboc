@@ -26,8 +26,10 @@ class TestModel(unittest.TestCase):
         exp = 1 + a * b + a - 2
         model = exp.compile()
         qubo, offset = model.to_qubo()
+        # assert_qubo_equal(
+        #     qubo, {("a", "a"): 1.0, ("a", "b"): 1.0, ("b", "b"): 0.0})
         assert_qubo_equal(
-            qubo, {("a", "a"): 1.0, ("a", "b"): 1.0, ("b", "b"): 0.0})
+            qubo, {("a", "a"): 1.0, ("a", "b"): 1.0})  # cimodが係数が0のlinearを削除するので。
         self.assertTrue(offset == -1)
 
     # ごめんなさい。index_label=Trueは未実装です。
