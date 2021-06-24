@@ -102,7 +102,8 @@ namespace std {
 }
 
 namespace pyquboc {
-  // TODO: monomialの場合を場合分けすることで効率化できるか、検討する。std::variantが使える？
+  // std::variantを使用してzeroやmonomialな場合の処理削減をやってみたのですが、パフォーマンスは向上しませんでした。なので、unordered_map一本でやります。
+  // まぁ、よく考えれば、要素数が0の場合の処理はunordered_mapの中でやっていそうですし。。。
 
   using polynomial = robin_hood::unordered_map<product, std::shared_ptr<const expression>>;
 
@@ -253,7 +254,7 @@ namespace pyquboc {
 
     auto energy(const std::unordered_map<std::string, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
       return to_bqm(feed_dict, to_cimod_vartype(vartype)).energy([&]() {
-        // BinaryQuadraticModelの引数でvartypeを設定しても、energyでは使われないみたい。。。Determine the energy of the specified sample of a binary quadratic modelって書いてある。。。
+        // BinaryQuadraticModelの引数でvartypeを設定しても、energyでは使われないみたい。。。Determine the energy of the specified sample of a binary quadratic modelって書いてある。
         // しょうがないので、spinからbinaryに変換します。
 
         auto result = sample;
