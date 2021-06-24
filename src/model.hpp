@@ -14,13 +14,14 @@
 #include <binary_quadratic_model.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/functional/hash.hpp>
+#include <robin_hood.h>
 
 #include "abstract_syntax_tree.hpp"
 
 namespace pyquboc {
   class variables final {
-    std::unordered_map<std::string, int> _indexes;
-    std::unordered_map<int, std::string> _names;
+    robin_hood::unordered_map<std::string, int> _indexes;
+    robin_hood::unordered_map<int, std::string> _names;
 
   public:
     variables() noexcept : _indexes{}, _names{} {
@@ -103,7 +104,7 @@ namespace std {
 namespace pyquboc {
   // TODO: monomialの場合を場合分けすることで効率化できるか、検討する。std::variantが使える？
 
-  using polynomial = std::unordered_map<product, std::shared_ptr<const expression>>;
+  using polynomial = robin_hood::unordered_map<product, std::shared_ptr<const expression>>;
 
   inline auto operator+(const polynomial& polynomial_1, const polynomial& polynomial_2) noexcept {
     auto result = polynomial_1;
@@ -200,8 +201,8 @@ namespace pyquboc {
 
   class model final {
     polynomial _quadratic_polynomial;
-    std::unordered_map<std::string, polynomial> _sub_hamiltonians;
-    std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
+    robin_hood::unordered_map<std::string, polynomial> _sub_hamiltonians;
+    robin_hood::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
     variables _variables;
 
     static auto to_cimod_vartype(const std::string vartype) noexcept {
@@ -209,7 +210,7 @@ namespace pyquboc {
     }
 
   public:
-    model(const polynomial& quadratic_polynomial, const std::unordered_map<std::string, polynomial>& sub_hamiltonians, const std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>>& constraints, const variables& variables) noexcept : _quadratic_polynomial(quadratic_polynomial), _sub_hamiltonians(sub_hamiltonians), _constraints(constraints), _variables(variables) {
+    model(const polynomial& quadratic_polynomial, const robin_hood::unordered_map<std::string, polynomial>& sub_hamiltonians, const robin_hood::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>>& constraints, const variables& variables) noexcept : _quadratic_polynomial(quadratic_polynomial), _sub_hamiltonians(sub_hamiltonians), _constraints(constraints), _variables(variables) {
       ;
     }
 

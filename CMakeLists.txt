@@ -3,9 +3,10 @@ cmake_policy(SET CMP0074 NEW)
 
 project(cpp_pyquboc)
 
-include(external/pybind11.cmake)
 include(external/cimod.cmake)
 include(external/eigen.cmake)
+include(external/pybind11.cmake)
+include(external/robin_hood.cmake)
 
 find_package(Boost REQUIRED)
 

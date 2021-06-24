@@ -10,8 +10,6 @@
 #include <boost/functional/hash.hpp>
 
 namespace pyquboc {
-  // TODO: std::variantを使用して、std::shared_ptrとか継承とかを使用せずに実装できるか検討する。Pythonからの参照で落とし穴にはまるような気がするけど。。。
-
   enum class expression_type {
     add_operator,
     mul_operator,

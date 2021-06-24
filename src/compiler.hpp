@@ -10,6 +10,8 @@
 #include <tuple>
 #include <utility>
 
+#include <robin_hood.h>
+
 #include "abstract_syntax_tree.hpp"
 #include "model.hpp"
 
@@ -19,8 +21,8 @@ namespace pyquboc {
   // TODO: ペナルティを最後ではなく途中で足し合わせられるか検討する。もし途中で足し合わせられるなら、戻り値が一つになって嬉しい。
 
   class expand final {
-    std::unordered_map<std::string, polynomial> _sub_hamiltonians;
-    std::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
+    robin_hood::unordered_map<std::string, polynomial> _sub_hamiltonians;
+    robin_hood::unordered_map<std::string, std::pair<polynomial, std::function<bool(double)>>> _constraints;
     variables* _variables;
 
   public:
