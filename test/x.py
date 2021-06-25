@@ -1,7 +1,7 @@
 from funcy import keep
 from neal import SimulatedAnnealingSampler
 from pyquboc import Binary, Constraint, Placeholder
-from timeit import timeit
+# from timeit import timeit
 
 
 M = 5   # 社員の数
@@ -33,7 +33,7 @@ for m1 in range(M):
             for d2 in range(d1 + 1, D):
                 h += b * Constraint(xs[m1][d1] * xs[m2][d1] * xs[m1][d2] * xs[m2][d2], f'different-member-{m1}-{m2}-{d1}-{d2}', lambda x: x == 0.0)  # xsは1か0なので、掛け算をする場合は、全部1の場合にだけ1になります
 
-print(timeit('h.compile()', number=1000, globals=globals()) / 1000)
+# print(timeit('h.compile()', number=1000, globals=globals()) / 1000)
 
 # コンパイルしてモデルを作ります
 model = h.compile()
