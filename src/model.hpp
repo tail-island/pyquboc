@@ -103,7 +103,7 @@ namespace std {
 
 namespace pyquboc {
   // std::variantを使用してzeroやmonomialな場合の処理削減をやってみたのですが、パフォーマンスは向上しませんでした。なので、unordered_map一本でやります。
-  // まぁ、よく考えれば、要素数が0の場合の処理はunordered_mapの中でやっていそうですし。。。
+  // まぁ、よく考えれば、要素数が0の場合の処理とかはunordered_mapの中でやっていそうですし。。。
 
   using polynomial = robin_hood::unordered_map<product, std::shared_ptr<const expression>>;
 
