@@ -4,6 +4,8 @@ from pyquboc import Binary, Constraint, Placeholder
 # from timeit import timeit
 
 
+# https://qiita.com/tail-island/items/c786d8b1bc5ccf3b5d53
+
 M = 5   # 社員の数
 D = 10  # 日数
 
