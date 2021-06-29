@@ -25,6 +25,10 @@ namespace pyquboc {
 
   class expression {
   public:
+    virtual ~expression() {
+      ;
+    }
+
     virtual pyquboc::expression_type expression_type() const noexcept = 0;
 
     virtual std::string to_string() const noexcept = 0;
@@ -65,7 +69,7 @@ namespace pyquboc {
       _children.emplace_back(expression);
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::add_operator;
     }
 
@@ -127,7 +131,7 @@ namespace pyquboc {
       return _rhs;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::mul_operator;
     }
 
@@ -178,7 +182,7 @@ namespace pyquboc {
       ;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::binary_variable;
     }
 
@@ -201,7 +205,7 @@ namespace pyquboc {
       ;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::spin_variable;
     }
 
@@ -224,7 +228,7 @@ namespace pyquboc {
       ;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::place_holder_variable;
     }
 
@@ -253,7 +257,7 @@ namespace pyquboc {
       return _expression;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::sub_hamiltonian;
     }
 
@@ -288,7 +292,7 @@ namespace pyquboc {
       return _condition;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::constraint;
     }
 
@@ -317,7 +321,7 @@ namespace pyquboc {
       return _penalty;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::with_penalty;
     }
 
@@ -351,7 +355,7 @@ namespace pyquboc {
       return _expression;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::user_defined_expression;
     }
 
@@ -380,7 +384,7 @@ namespace pyquboc {
       return _value;
     }
 
-    pyquboc::expression_type expression_type() const noexcept {
+    pyquboc::expression_type expression_type() const noexcept override {
       return expression_type::numeric_literal;
     }
 
