@@ -32,14 +32,14 @@ class TestModel(unittest.TestCase):
             qubo, {("a", "a"): 1.0, ("a", "b"): 1.0})  # cimodが係数が0のlinearを削除するので。
         self.assertTrue(offset == -1)
 
-    # ごめんなさい。index_label=Trueは未実装です。
-    # def test_to_qubo_with_index(self):
-    #     a, b = Binary("a"), Binary("b")
-    #     exp = 1 + a * b + a - 2
-    #     model = exp.compile()
-    #     qubo, offset = model.to_qubo(index_label=True)
-    #     assert_qubo_equal(qubo, {(0, 0): 1.0, (0, 1): 1.0, (1, 1): 0.0})
-    #     self.assertTrue(offset == -1)
+    def test_to_qubo_with_index(self):
+        a, b = Binary("a"), Binary("b")
+        exp = 1 + a * b + a - 2
+        model = exp.compile()
+        qubo, offset = model.to_qubo(index_label=True)
+        # assert_qubo_equal(qubo, {(0, 0): 1.0, (0, 1): 1.0, (1, 1): 0.0})
+        assert_qubo_equal(qubo, {(0, 0): 1.0, (0, 1): 1.0})  # cimodが係数が0のlinearを削除するので。
+        self.assertTrue(offset == -1)
 
     def test_to_ising(self):
         a, b = Binary("a"), Binary("b")
@@ -50,15 +50,14 @@ class TestModel(unittest.TestCase):
         assert_qubo_equal(quad, {('a', 'b'): 0.25})
         self.assertTrue(offset == -0.25)
 
-    # ごめんなさい。index_label=Trueは未実装です。
-    # def test_to_ising_with_index(self):
-    #     a, b = Binary("a"), Binary("b")
-    #     exp = 1 + a * b + a - 2
-    #     model = exp.compile()
-    #     linear, quad, offset = model.to_ising(index_label=True)
-    #     self.assertTrue(linear == {0: 0.75, 1: 0.25})
-    #     assert_qubo_equal(quad, {(0, 1): 0.25})
-    #     self.assertTrue(offset == -0.25)
+    def test_to_ising_with_index(self):
+        a, b = Binary("a"), Binary("b")
+        exp = 1 + a * b + a - 2
+        model = exp.compile()
+        linear, quad, offset = model.to_ising(index_label=True)
+        self.assertTrue(linear == {0: 0.75, 1: 0.25})
+        assert_qubo_equal(quad, {(0, 1): 0.25})
+        self.assertTrue(offset == -0.25)
 
     def test_decode_sample(self):
         x = Array.create("x", (2, 2), vartype="BINARY")
@@ -109,102 +108,100 @@ class TestModel(unittest.TestCase):
         self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
         self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
 
-        # ごめんなさい。list[int]は未実装です。ほとんど同じコードを二回書くのに耐えられなかった……。
+        # type of solution is list[int]
 
-        # # type of solution is list[int]
+        # # vartype = BINARY
+        sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 1}
+        list_sample = [sample[v] for v in model.variables]
+        decoded_sample = model.decode_sample(list_sample, vartype="BINARY")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
+        self.assertTrue(decoded_sample.energy == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
 
-        # # # vartype = BINARY
-        # sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 1}
-        # list_sample = [sample[v] for v in model.variables]
-        # decoded_sample = model.decode_sample(list_sample, vartype="BINARY")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
-        # self.assertTrue(decoded_sample.energy == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
+        sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 0}
+        list_sample = [sample[v] for v in model.variables]
+        decoded_sample = model.decode_sample(list_sample, vartype="BINARY")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
+        self.assertTrue(decoded_sample.energy == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
 
-        # sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 0}
-        # list_sample = [sample[v] for v in model.variables]
-        # decoded_sample = model.decode_sample(list_sample, vartype="BINARY")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
-        # self.assertTrue(decoded_sample.energy == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
+        # # vartype = SPIN
+        sample = {'x[0][1]': 1, 'x[1][1]': 1, 'x[0][0]': -1}
+        list_sample = [sample[v] for v in model.variables]
+        decoded_sample = model.decode_sample(list_sample, vartype="SPIN")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
+        self.assertTrue(decoded_sample.energy == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 1)
 
-        # # # vartype = SPIN
-        # sample = {'x[0][1]': 1, 'x[1][1]': 1, 'x[0][0]': -1}
-        # list_sample = [sample[v] for v in model.variables]
-        # decoded_sample = model.decode_sample(list_sample, vartype="SPIN")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
-        # self.assertTrue(decoded_sample.energy == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 1)
+        sample = {'x[0][1]': 1, 'x[1][1]': -1, 'x[0][0]': -1}
+        list_sample = [sample[v] for v in model.variables]
+        decoded_sample = model.decode_sample(list_sample, vartype="SPIN")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
+        self.assertTrue(decoded_sample.energy == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
 
-        # sample = {'x[0][1]': 1, 'x[1][1]': -1, 'x[0][0]': -1}
-        # list_sample = [sample[v] for v in model.variables]
-        # decoded_sample = model.decode_sample(list_sample, vartype="SPIN")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
-        # self.assertTrue(decoded_sample.energy == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
+        # type of solution is dict[index_label(int), bit]
+        # # vartype = BINARY
+        sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 1}
+        sample_index = {i: sample[v] for i, v in enumerate(model.variables)}
+        decoded_sample = model.decode_sample(sample_index, vartype="BINARY")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
+        self.assertTrue(decoded_sample.energy == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
 
-        # # type of solution is dict[index_label(int), bit]
-        # # # vartype = BINARY
-        # sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 1}
-        # sample_index = {i: sample[v] for i, v in enumerate(model.variables)}
-        # decoded_sample = model.decode_sample(sample_index, vartype="BINARY")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
-        # self.assertTrue(decoded_sample.energy == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
+        sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 0}
+        sample_index = {v: sample[v] for v in model.variables}
+        decoded_sample = model.decode_sample(sample_index, vartype="BINARY")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
+        self.assertTrue(decoded_sample.energy == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
 
-        # sample = {'x[0][1]': 1, 'x[1][1]': 0, 'x[0][0]': 0}
-        # sample_index = {v: sample[v] for v in model.variables}
-        # decoded_sample = model.decode_sample(sample_index, vartype="BINARY")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
-        # self.assertTrue(decoded_sample.energy == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 0)
+        # # vartype = SPIN
+        sample = {'x[0][1]': 1, 'x[1][1]': 1, 'x[0][0]': -1}
+        sample_index = {v: sample[v] for v in model.variables}
+        decoded_sample = model.decode_sample(sample_index, vartype="SPIN")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
+        self.assertTrue(decoded_sample.energy == 1)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == 1)
 
-        # # # vartype = SPIN
-        # sample = {'x[0][1]': 1, 'x[1][1]': 1, 'x[0][0]': -1}
-        # sample_index = {v: sample[v] for v in model.variables}
-        # decoded_sample = model.decode_sample(sample_index, vartype="SPIN")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 1)
-        # self.assertTrue(decoded_sample.energy == 1)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == 1)
-
-        # sample = {'x[0][1]': 1, 'x[1][1]': -1, 'x[0][0]': -1}
-        # sample_index = {v: sample[v] for v in model.variables}
-        # decoded_sample = model.decode_sample(sample_index, vartype="SPIN")
-        # self.assertTrue(decoded_sample.sample == sample)
-        # self.assertTrue(
-        #     len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
-        # self.assertTrue(decoded_sample.energy == 0)
-        # self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
-        # self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
-        # self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
+        sample = {'x[0][1]': 1, 'x[1][1]': -1, 'x[0][0]': -1}
+        sample_index = {v: sample[v] for v in model.variables}
+        decoded_sample = model.decode_sample(sample_index, vartype="SPIN")
+        self.assertTrue(decoded_sample.sample == sample)
+        self.assertTrue(
+            len([label for label, energy in decoded_sample.subh.items() if energy > 0]) == 0)
+        self.assertTrue(decoded_sample.energy == 0)
+        self.assertTrue(decoded_sample.array("x", (0, 0)) == -1)
+        self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
+        self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
 
         # 異常系は異常終了するので、とりあえず無視させてください。
 
