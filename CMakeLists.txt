@@ -3,12 +3,21 @@ cmake_policy(SET CMP0074 NEW)
 
 project(cpp_pyquboc)
 
+include(external/boost_assert.cmake)
+include(external/boost_config.cmake)
+include(external/boost_container.cmake)
+include(external/boost_container_hash.cmake)
+include(external/boost_core.cmake)
+include(external/boost_detail.cmake)
+include(external/boost_integer.cmake)
+include(external/boost_intrusive.cmake)
+include(external/boost_move.cmake)
+include(external/boost_static_assert.cmake)
+include(external/boost_type_traits.cmake)
 include(external/cimod.cmake)
 include(external/eigen.cmake)
 include(external/pybind11.cmake)
 include(external/robin_hood.cmake)
-
-find_package(Boost REQUIRED)
 
 pybind11_add_module(cpp_pyquboc src/main.cpp)
 
