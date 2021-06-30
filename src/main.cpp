@@ -107,9 +107,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
       .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&>(), py::arg("hamiltonian"), py::arg("label"));
 
   py::class_<pyquboc::constraint, std::shared_ptr<pyquboc::constraint>, pyquboc::expression>(m, "Constraint")
-      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>(), py::arg("hamiltonian"), py::arg("label"), py::arg("condition") = py::cpp_function([](double x) {
-                                                                                                                                                                              return x == 0;
-                                                                                                                                                                            }));
+      .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::string&, const std::function<bool(double)>&>(), py::arg("hamiltonian"), py::arg("label"), py::arg("condition") = py::cpp_function([](double x) { return x == 0; }));
 
   py::class_<pyquboc::with_penalty, std::shared_ptr<pyquboc::with_penalty>, pyquboc::expression>(m, "WithPenalty")
       .def(py::init<const std::shared_ptr<const pyquboc::expression>&, const std::shared_ptr<const pyquboc::expression>&, const std::string&>());
@@ -177,46 +175,46 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
       .def_property_readonly("variables", &pyquboc::model::variable_names)
       .def(
           "to_bqm", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
-            const auto binary_quadratic_model = py::module::import("dimod").attr("BinaryQuadraticModel");
+            const auto binary_quadratic_model = py::module::import("dimod").attr("BinaryQuadraticModel"); // dimodのPythonのBinaryQuadraticModelを作成します。cimodのPythonのBinaryQuadraticModelだと、dwave-nealで通らなかった……。
             const auto binary = py::module::import("dimod").attr("Vartype").attr("BINARY");
 
-            if (index_label) {
-              const auto [linear, quadratic, offset] = model.to_bqm_parameters<int>(feed_dict);
-              return binary_quadratic_model(linear, quadratic, offset, binary); // dimodのPythonのBinaryQuadraticModelを作成します。cimodのPythonのBinaryQuadraticModelだと、dwave-nealで通らなかった……。
-            } else {
+            if (!index_label) {
               const auto [linear, quadratic, offset] = model.to_bqm_parameters<std::string>(feed_dict);
+              return binary_quadratic_model(linear, quadratic, offset, binary);
+            } else {
+              const auto [linear, quadratic, offset] = model.to_bqm_parameters<int>(feed_dict);
               return binary_quadratic_model(linear, quadratic, offset, binary);
             }
           },
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
           "to_qubo", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
-            if (index_label) {
-              return py::cast(model.to_bqm<int>(feed_dict, cimod::Vartype::BINARY).to_qubo());
-            } else {
+            if (!index_label) {
               return py::cast(model.to_bqm<std::string>(feed_dict, cimod::Vartype::BINARY).to_qubo());
+            } else {
+              return py::cast(model.to_bqm<int>(feed_dict, cimod::Vartype::BINARY).to_qubo());
             }
           },
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
           "to_ising", [](const pyquboc::model& model, bool index_label, const std::unordered_map<std::string, double>& feed_dict) {
-            if (index_label) {
-              return py::cast(model.to_bqm<int>(feed_dict, cimod::Vartype::BINARY).to_ising());
-            } else {
+            if (!index_label) {
               return py::cast(model.to_bqm<std::string>(feed_dict, cimod::Vartype::BINARY).to_ising());
+            } else {
+              return py::cast(model.to_bqm<int>(feed_dict, cimod::Vartype::BINARY).to_ising());
             }
           },
           py::arg("index_label") = false, py::arg("feed_dict") = std::unordered_map<std::string, double>{})
       .def(
           "energy", [](const pyquboc::model& model, const py::object& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) {
             try {
-              return model.energy(sample.cast<std::unordered_map<int, int>>(), vartype, feed_dict);
+              return model.energy(sample.cast<std::unordered_map<std::string, int>>(), vartype, feed_dict);
             } catch (...) {
               ;
             }
 
             try {
-              return model.energy(sample.cast<std::unordered_map<std::string, int>>(), vartype, feed_dict);
+              return model.energy(sample.cast<std::unordered_map<int, int>>(), vartype, feed_dict);
             } catch (...) {
               ;
             }
@@ -227,17 +225,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
       .def(
           "decode_sample", [](const pyquboc::model& model, const py::object& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) {
             try {
-              const auto sample_vec = sample.cast<std::vector<int>>();
-
-              return model.decode_sample([&]() {
-                auto result = std::unordered_map<int, int>{};
-
-                for (auto i = 0; i < static_cast<int>(std::size(sample_vec)); ++i) {
-                  result.emplace(i, sample_vec[i]);
-                }
-
-                return result;
-              }(), vartype, feed_dict);
+              return model.decode_sample(sample.cast<std::unordered_map<std::string, int>>(), vartype, feed_dict);
             } catch (...) {
               ;
             }
@@ -249,7 +237,16 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             }
 
             try {
-              return model.decode_sample(sample.cast<std::unordered_map<std::string, int>>(), vartype, feed_dict);
+              return model.decode_sample([&]() {
+                auto result = std::unordered_map<int, int>{};
+
+                const auto v = sample.cast<std::vector<int>>();
+                for (auto i = 0; i < static_cast<int>(std::size(v)); ++i) {
+                  result.emplace(i, v[i]);
+                }
+
+                return result;
+              }(), vartype, feed_dict);
             } catch (...) {
               ;
             }
@@ -269,12 +266,14 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             }
 
             try {
+              const auto variables = sampleset.attr("variables").cast<std::vector<std::string>>();
+
               const auto samples = [&]() {
-                auto result = std::vector<std::unordered_map<int, int>>(info.shape[0]);
+                auto result = std::vector<std::unordered_map<std::string, int>>(info.shape[0]);
 
                 for (auto i = 0; i < info.shape[0]; ++i) {
                   for (auto j = 0; j < info.shape[1]; ++j) {
-                    result[i].emplace(j, *array.data(i, j));
+                    result[i].emplace(variables[j], *array.data(i, j));
                   }
                 }
 
@@ -287,14 +286,12 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             }
 
             try {
-              const auto variables = sampleset.attr("variables").cast<std::vector<std::string>>();
-
               const auto samples = [&]() {
-                auto result = std::vector<std::unordered_map<std::string, int>>(info.shape[0]);
+                auto result = std::vector<std::unordered_map<int, int>>(info.shape[0]);
 
                 for (auto i = 0; i < info.shape[0]; ++i) {
                   for (auto j = 0; j < info.shape[1]; ++j) {
-                    result[i].emplace(variables[j], *array.data(i, j));
+                    result[i].emplace(j, *array.data(i, j));
                   }
                 }
 

@@ -103,7 +103,7 @@ namespace std {
 
 namespace pyquboc {
   // std::variantを使用してzeroやmonomialな場合の処理削減をやってみたのですが、パフォーマンスは向上しませんでした。なので、unordered_map一本でやります。
-  // まぁ、よく考えれば、要素数が0の場合の処理とかはunordered_mapの中でやっていそうですし。。。
+  // よく考えれば、要素数が0の場合の処理とかはunordered_mapの中でやっていそうですし。。。
 
   using polynomial = robin_hood::unordered_map<product, std::shared_ptr<const expression>>;
 
@@ -221,7 +221,7 @@ namespace pyquboc {
 
     // TODO: std::stringじゃなくてintの方を特殊化する。
 
-    template <typename T>
+    template <typename T = std::string>
     auto to_bqm_parameters(const std::unordered_map<std::string, double>& feed_dict) const noexcept { // 不格好でごめんなさい。PythonのBinaryQuadraticModelを作成可能にするために、このメンバ関数でBinaryQuadraticModelの引数を生成します。
       const auto evaluate = pyquboc::evaluate(feed_dict);
 
@@ -238,11 +238,11 @@ namespace pyquboc {
           break;
         }
         case 1: {
-          linear.emplace(product.indexes()[0], coefficient_value);
+          linear.emplace(_variables.name(product.indexes()[0]), coefficient_value);
           break;
         }
         case 2: {
-          quadratic.emplace(std::pair{product.indexes()[0], product.indexes()[1]}, coefficient_value);
+          quadratic.emplace(std::pair{_variables.name(product.indexes()[0]), _variables.name(product.indexes()[1])}, coefficient_value);
           break;
         }
         default:
@@ -253,14 +253,14 @@ namespace pyquboc {
       return std::tuple{linear, quadratic, offset};
     }
 
-    template <typename T>
+    template <typename T = std::string>
     auto to_bqm(const std::unordered_map<std::string, double>& feed_dict, cimod::Vartype vartype) const noexcept {
       const auto [linear, quadratic, offset] = to_bqm_parameters<T>(feed_dict);
 
       return cimod::BinaryQuadraticModel<T, double, cimod::Dense>(linear, quadratic, offset, vartype);
     }
 
-    template <typename T>
+    template <typename T = std::string>
     auto energy(const std::unordered_map<T, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
       return to_bqm<T>(feed_dict, to_cimod_vartype(vartype)).energy([&]() {
         // BinaryQuadraticModelの引数でvartypeを設定しても、energyでは使われないみたい。。。Determine the energy of the specified sample of a binary quadratic modelって書いてある。
@@ -278,14 +278,14 @@ namespace pyquboc {
       }());
     }
 
-    template <typename T>
+    template <typename T = std::string>
     auto decode_sample(const std::unordered_map<T, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
       const auto evaluate = pyquboc::evaluate(feed_dict);
       const auto evaluate_polynomial = [&](const auto& polynomial, const auto& sample) {
         return std::accumulate(std::begin(polynomial), std::end(polynomial), 0.0, [&](const auto acc, const auto& term) {
           return acc +
                  std::accumulate(std::begin(term.first.indexes()), std::end(term.first.indexes()), 1, [&](const auto acc, const auto& index) {
-                   const auto value = sample.at(index);
+                   const auto value = sample.at(_variables.name(index));
 
                    return acc * (vartype == "BINARY" ? value : (value + 1) / 2);
                  }) * evaluate(term.second);
@@ -293,15 +293,7 @@ namespace pyquboc {
       };
 
       return solution(
-          [&]() {
-            auto result = std::unordered_map<std::string, int>{};
-
-            std::transform(std::begin(sample), std::end(sample), std::inserter(result, std::begin(result)), [&](const auto& index_and_value) {
-              return std::pair{_variables.name(index_and_value.first), index_and_value.second};
-            });
-
-            return result;
-          }(),
+          sample,
           energy<T>(sample, vartype, feed_dict),
           [&]() {
             auto result = std::unordered_map<std::string, double>{};
@@ -326,7 +318,7 @@ namespace pyquboc {
           }());
     }
 
-    template <typename T>
+    template <typename T = std::string>
     auto decode_samples(const std::vector<std::unordered_map<T, int>>& samples, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
       auto result = std::vector<solution>{};
 
@@ -339,11 +331,11 @@ namespace pyquboc {
   };
 
   template <>
-  inline auto model::to_bqm_parameters<std::string>(const std::unordered_map<std::string, double>& feed_dict) const noexcept { // メンバ関数を特殊化するときは、クラスの外に書かなければなりません。。。
+  inline auto model::to_bqm_parameters<int>(const std::unordered_map<std::string, double>& feed_dict) const noexcept { // メンバ関数を特殊化するときは、クラスの外に書かなければなりません。。。
     const auto evaluate = pyquboc::evaluate(feed_dict);
 
-    auto linear = cimod::Linear<std::string, double>{};
-    auto quadratic = cimod::Quadratic<std::string, double>{};
+    auto linear = cimod::Linear<int, double>{};
+    auto quadratic = cimod::Quadratic<int, double>{};
     auto offset = 0.0;
 
     for (const auto& [product, coefficient] : _quadratic_polynomial) {
@@ -355,11 +347,11 @@ namespace pyquboc {
         break;
       }
       case 1: {
-        linear.emplace(_variables.name(product.indexes()[0]), coefficient_value);
+        linear.emplace(product.indexes()[0], coefficient_value);
         break;
       }
       case 2: {
-        quadratic.emplace(std::pair{_variables.name(product.indexes()[0]), _variables.name(product.indexes()[1])}, coefficient_value);
+        quadratic.emplace(std::pair{product.indexes()[0], product.indexes()[1]}, coefficient_value);
         break;
       }
       default:
@@ -371,13 +363,13 @@ namespace pyquboc {
   }
 
   template <>
-  inline auto model::decode_sample<std::string>(const std::unordered_map<std::string, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
+  inline auto model::decode_sample<int>(const std::unordered_map<int, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
     const auto evaluate = pyquboc::evaluate(feed_dict);
     const auto evaluate_polynomial = [&](const auto& polynomial, const auto& sample) {
       return std::accumulate(std::begin(polynomial), std::end(polynomial), 0.0, [&](const auto acc, const auto& term) {
         return acc +
                std::accumulate(std::begin(term.first.indexes()), std::end(term.first.indexes()), 1, [&](const auto acc, const auto& index) {
-                 const auto value = sample.at(_variables.name(index));
+                 const auto value = sample.at(index);
 
                  return acc * (vartype == "BINARY" ? value : (value + 1) / 2);
                }) * evaluate(term.second);
@@ -385,8 +377,16 @@ namespace pyquboc {
     };
 
     return solution(
-        sample,
-        energy<std::string>(sample, vartype, feed_dict),
+        [&]() {
+          auto result = std::unordered_map<std::string, int>{};
+
+          std::transform(std::begin(sample), std::end(sample), std::inserter(result, std::begin(result)), [&](const auto& index_and_value) {
+            return std::pair{_variables.name(index_and_value.first), index_and_value.second};
+          });
+
+          return result;
+        }(),
+        energy<int>(sample, vartype, feed_dict),
         [&]() {
           auto result = std::unordered_map<std::string, double>{};
 
