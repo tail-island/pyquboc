@@ -203,7 +203,7 @@ class TestModel(unittest.TestCase):
         self.assertTrue(decoded_sample.array("x", (0, 1)) == 1)
         self.assertTrue(decoded_sample.array("x", (1, 1)) == -1)
 
-        # 異常系は異常終了するので、とりあえず無視させてください。
+        # 異常系は普通に異常終了するので、無視させてください。
 
         # invalid solution
         # self.assertRaises(ValueError, lambda: model.decode_sample(
