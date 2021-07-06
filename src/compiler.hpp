@@ -116,7 +116,7 @@ namespace pyquboc {
   // Convert to quadratic polynomial.
 
   inline std::optional<std::pair<int, int>> find_replacing_pair(const pyquboc::polynomial& polynomial) noexcept {
-    auto counts = [&]() {
+    auto counts = [&] {
       auto result = std::map<std::pair<int, int>, int>{};
 
       for (const auto& [product, _] : polynomial) {
@@ -172,7 +172,7 @@ namespace pyquboc {
           break;
         }
 
-        const auto indexes = [&]() {
+        const auto indexes = [&] {
           auto result = pyquboc::indexes{};
 
           std::copy_if(std::begin(it->first.indexes()), std::end(it->first.indexes()), std::back_inserter(result), [&](const auto& index) {

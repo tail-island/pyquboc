@@ -76,7 +76,7 @@ namespace pyquboc {
   };
 
   inline auto operator*(const product& product_1, const product& product_2) noexcept {
-    return product([&]() {
+    return product([&] {
       auto result = indexes{};
 
       std::set_union(std::begin(product_1.indexes()), std::end(product_1.indexes()),
@@ -262,7 +262,7 @@ namespace pyquboc {
 
     template <typename T = std::string>
     auto energy(const std::unordered_map<T, int>& sample, const std::string& vartype, const std::unordered_map<std::string, double>& feed_dict) const noexcept {
-      return to_bqm<T>(feed_dict, to_cimod_vartype(vartype)).energy([&]() {
+      return to_bqm<T>(feed_dict, to_cimod_vartype(vartype)).energy([&] {
         // BinaryQuadraticModelの引数でvartypeを設定しても、energyでは使われないみたい。。。Determine the energy of the specified sample of a binary quadratic modelって書いてある。
         // しょうがないので、spinからbinaryに変換します。
 
@@ -295,7 +295,7 @@ namespace pyquboc {
       return solution(
           sample,
           energy<T>(sample, vartype, feed_dict),
-          [&]() {
+          [&] {
             auto result = std::unordered_map<std::string, double>{};
 
             for (const auto& [name, polynomial] : _sub_hamiltonians) {
@@ -304,7 +304,7 @@ namespace pyquboc {
 
             return result;
           }(),
-          [&]() {
+          [&] {
             auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
 
             for (const auto& [name, pair] : _constraints) {
@@ -377,7 +377,7 @@ namespace pyquboc {
     };
 
     return solution(
-        [&]() {
+        [&] {
           auto result = std::unordered_map<std::string, int>{};
 
           std::transform(std::begin(sample), std::end(sample), std::inserter(result, std::begin(result)), [&](const auto& index_and_value) {
@@ -387,7 +387,7 @@ namespace pyquboc {
           return result;
         }(),
         energy<int>(sample, vartype, feed_dict),
-        [&]() {
+        [&] {
           auto result = std::unordered_map<std::string, double>{};
 
           for (const auto& [name, polynomial] : _sub_hamiltonians) {
@@ -396,7 +396,7 @@ namespace pyquboc {
 
           return result;
         }(),
-        [&]() {
+        [&] {
           auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
 
           for (const auto& [name, pair] : _constraints) {

@@ -135,7 +135,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             auto constraints = solution.constraints();
 
             if (only_broken) {
-              return [&]() {
+              return [&] {
                 auto result = std::unordered_map<std::string, std::pair<bool, double>>{};
 
                 for (const auto& [name, value] : constraints) {
@@ -159,7 +159,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
         return solution.sample().at(name + "[" + std::to_string(index) + "]");
       })
       .def("array", [](const pyquboc::solution& solution, const std::string& name, const py::tuple& indexes) {
-        const auto name_and_indexes = [&]() {
+        const auto name_and_indexes = [&] {
           auto result = name;
 
           for (const auto& index : indexes.cast<std::vector<int>>()) {
@@ -237,7 +237,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             }
 
             try {
-              return model.decode_sample([&]() {
+              return model.decode_sample([&] {
                 auto result = std::unordered_map<int, int>{};
 
                 const auto v = sample.cast<std::vector<int>>();
@@ -268,7 +268,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             try {
               const auto variables = sampleset.attr("variables").cast<std::vector<std::string>>();
 
-              const auto samples = [&]() {
+              const auto samples = [&] {
                 auto result = std::vector<std::unordered_map<std::string, int>>(info.shape[0]);
 
                 for (auto i = 0; i < info.shape[0]; ++i) {
@@ -286,7 +286,7 @@ PYBIND11_MODULE(cpp_pyquboc, m) {
             }
 
             try {
-              const auto samples = [&]() {
+              const auto samples = [&] {
                 auto result = std::vector<std::unordered_map<int, int>>(info.shape[0]);
 
                 for (auto i = 0; i < info.shape[0]; ++i) {
